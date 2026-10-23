@@ -1,0 +1,341 @@
+{
+  "info": {
+    "name": "ThinDesk - Microsserviço de Chamados",
+    "description": "Demonstração dos endpoints do microsserviço de chamados.\n\nAntes de usar: preencha as variáveis da collection (aba Variables) com o e-mail e a senha de um usuário comum (perfil USER) e de um técnico (perfil MANAGER ou ADMIN) cadastrados no serviço de login.\n\nOrdem sugerida: 1 → 2 → 3 → 4. O login (pasta 1) é feito no serviço de login (porta 8080); o cookie SESSION gerado é reutilizado automaticamente pelo microsserviço (porta 8081).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "loginUrl", "value": "http://localhost:8080" },
+    { "key": "baseUrl", "value": "http://localhost:8081" },
+    { "key": "usuarioEmail", "value": "" },
+    { "key": "usuarioSenha", "value": "" },
+    { "key": "tecnicoEmail", "value": "" },
+    { "key": "tecnicoSenha", "value": "" },
+    { "key": "csrf", "value": "" },
+    { "key": "usuarioId", "value": "" },
+    { "key": "chamadoId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Login (serviço de login)",
+      "description": "Sempre rode 'Abrir tela de login' antes de 'Entrar como ...' (ele captura o token CSRF).",
+      "item": [
+        {
+          "name": "Abrir tela de login (captura CSRF)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const m = html.match(/name=\"_csrf\"[^>]*value=\"([^\"]+)\"/) || html.match(/value=\"([^\"]+)\"[^>]*name=\"_csrf\"/);",
+                  "pm.test('Token CSRF capturado', () => pm.expect(m, 'token _csrf não encontrado no HTML').to.not.be.null);",
+                  "if (m) pm.collectionVariables.set('csrf', m[1]);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{loginUrl}}/login"
+          }
+        },
+        {
+          "name": "Entrar como USUÁRIO",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const destino = pm.response.headers.get('Location') || '';",
+                  "pm.test('Login realizado (redireciona para /painel)', () => pm.expect(destino).to.include('/painel'));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": { "followRedirects": false },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "email", "value": "{{usuarioEmail}}" },
+                { "key": "password", "value": "{{usuarioSenha}}" },
+                { "key": "_csrf", "value": "{{csrf}}" }
+              ]
+            },
+            "url": "{{loginUrl}}/login"
+          }
+        },
+        {
+          "name": "Entrar como TÉCNICO",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const destino = pm.response.headers.get('Location') || '';",
+                  "pm.test('Login realizado (redireciona para /painel)', () => pm.expect(destino).to.include('/painel'));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": { "followRedirects": false },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "email", "value": "{{tecnicoEmail}}" },
+                { "key": "password", "value": "{{tecnicoSenha}}" },
+                { "key": "_csrf", "value": "{{csrf}}" }
+              ]
+            },
+            "url": "{{loginUrl}}/login"
+          }
+        },
+        {
+          "name": "Quem sou eu (microsserviço)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Microsserviço reconheceu o usuário logado', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Chamados - usuário",
+      "description": "Faça login como USUÁRIO antes (pasta 1).",
+      "item": [
+        {
+          "name": "Abrir chamado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const c = pm.response.json();",
+                  "pm.test('Status ABERTO', () => pm.expect(c.status).to.eql('ABERTO'));",
+                  "pm.collectionVariables.set('chamadoId', c.id);",
+                  "pm.collectionVariables.set('usuarioId', c.solicitanteId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Computador não liga\",\n  \"descricao\": \"O computador da sala 12 não liga desde hoje de manhã.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/chamados"
+          }
+        },
+        {
+          "name": "Abrir chamado inválido (validação)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"\",\n  \"descricao\": \"curta\"\n}"
+            },
+            "url": "{{baseUrl}}/api/chamados"
+          }
+        },
+        {
+          "name": "Listar chamados do usuário",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/chamados/usuario/{{usuarioId}}"
+          }
+        },
+        {
+          "name": "Consultar chamado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/chamados/{{chamadoId}}"
+          }
+        },
+        {
+          "name": "Tentar resolver como usuário (bloqueado)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"solucao\": \"Eu mesmo resolvi o problema.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/chamados/{{chamadoId}}/resolver"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Chamados - técnico",
+      "description": "Faça login como TÉCNICO antes (pasta 1: 'Abrir tela de login' e depois 'Entrar como TÉCNICO').",
+      "item": [
+        {
+          "name": "Resolver chamado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const c = pm.response.json();",
+                  "pm.test('Status RESOLVIDO', () => pm.expect(c.status).to.eql('RESOLVIDO'));",
+                  "pm.test('Data de resolução registrada', () => pm.expect(c.dataResolucao).to.be.a('string'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"solucao\": \"Fonte de alimentação substituída e equipamento testado.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/chamados/{{chamadoId}}/resolver"
+          }
+        },
+        {
+          "name": "Resolver de novo (bloqueado)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 Conflict', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"solucao\": \"Tentando alterar um chamado já resolvido.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/chamados/{{chamadoId}}/resolver"
+          }
+        },
+        {
+          "name": "Consultar chamado resolvido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Status RESOLVIDO', () => pm.expect(pm.response.json().status).to.eql('RESOLVIDO'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/chamados/{{chamadoId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Sem login",
+      "item": [
+        {
+          "name": "Abrir chamado sem login (bloqueado)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": { "disableCookies": true },
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Chamado sem login\",\n  \"descricao\": \"Esta requisição não envia o cookie de sessão.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/chamados"
+          }
+        }
+      ]
+    }
+  ]
+}
